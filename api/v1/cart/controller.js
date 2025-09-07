@@ -1,6 +1,5 @@
 const { cartModel } = require("../../../models/cartSchema");
 
-// Add product to cart
 const addToCartController = async (req, res) => {
     try {
         const { productId } = req.params;
@@ -9,14 +8,14 @@ const addToCartController = async (req, res) => {
         let cartItem = await cartModel.findOne({ userId, productId });
 
         if (cartItem) {
-            // Item exists → increment quantity
+
             cartItem = await cartModel.findByIdAndUpdate(
                 cartItem._id,
                 { $inc: { cartQuantity: 1 } },
                 { new: true }
             ).populate("productId");
         } else {
-            // Item does not exist → create new
+
             cartItem = await cartModel.create({
                 userId,
                 productId,
@@ -39,8 +38,6 @@ const addToCartController = async (req, res) => {
         });
     }
 };
-
-// Remove product from cart
 const removeItemFromCartController = async (req, res) => {
     try {
         const { productId } = req.params;
@@ -56,7 +53,6 @@ const removeItemFromCartController = async (req, res) => {
         }
 
         if (cartItem.cartQuantity > 1) {
-            // Decrement quantity
             const updatedItem = await cartModel.findByIdAndUpdate(
                 cartItem._id,
                 { $inc: { cartQuantity: -1 } },
@@ -69,7 +65,6 @@ const removeItemFromCartController = async (req, res) => {
                 cartItem: updatedItem,
             });
         } else {
-            // Quantity is 1 → remove item
             await cartModel.findByIdAndDelete(cartItem._id);
             return res.status(200).json({
                 isSuccess: true,
@@ -87,13 +82,12 @@ const removeItemFromCartController = async (req, res) => {
     }
 };
 
-// Get cart items
 const getCartItemController = async (req, res) => {
     try {
         const { _id: userId } = req.currentUser;
 
         const cartItems = await cartModel.find({ userId })
-            .populate("productId") // Populate product details
+            .populate("productId") 
             .lean();
 
         res.status(200).json({

@@ -6,6 +6,7 @@ const usersignupController = async (req, res) => {
     try {
         console.log("<-----Inside usersignupController------>");
         const { email, password } = req.body;
+
         // const salt = await bcrypt.genSalt(15)
         // // increasing the computation in order of 2^x where x is rounds
         // // higher the number ,more secure it is ,it is more computationally heavy---->>slower
@@ -13,8 +14,9 @@ const usersignupController = async (req, res) => {
         // const hashedPassword = await bcrypt.hash(password.toString(), salt);
         // console.log("Hashed Password---->>", hashedPassword);
         // const hashedPassword = await bcrypt.hash(password.toString(), 12);
+        const normalizedEmail = email.toLowerCase();
         const newUser = await UserModel.create({
-            email,
+            email: normalizedEmail,
             password,
         });
         res.status(201).json({
@@ -53,10 +55,11 @@ const userloginController = async (req, res) => {
     try {
         console.log("<-----Inside userloginController------>");
         const { email, password } = req.body;
-        // will check if the any user exists with this given email
-        // const otpDocs = await otpModel.findOne().where(email).equals(email).sort("-createdAt");
+        const normalizedEmail = email.toLowerCase();
+
+
         const userDoc = await UserModel.findOne({
-            email: email,
+            email: normalizedEmail,
         }).lean();
         // validation if user exist or not
         if (userDoc == null) {
