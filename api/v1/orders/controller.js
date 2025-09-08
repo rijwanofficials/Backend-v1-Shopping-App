@@ -1,5 +1,6 @@
 const { cartModel } = require("../../../models/cartSchema");
-const { ProductModel } = require("../../../models/productSchema");
+const { ProductModel } = require('../../../models/productSchema');
+const mongoose = require("mongoose")
 
 const placeOrderController = async (req, res) => {
     try {
@@ -7,11 +8,8 @@ const placeOrderController = async (req, res) => {
 
         const { address } = req.body;
         const { _id: userId } = req.currentUser;
-        console.log("User ID:", userId);
 
         const cartItems = await cartModel.find({ userId: userId });
-        console.log("Cart Items fetched from DB:", cartItems);
-
         // Check if cart is empty
         if (!cartItems || cartItems.length === 0) {
             return res.status(400).json({
@@ -28,49 +26,75 @@ const placeOrderController = async (req, res) => {
             });
         }
 
-        let allItemsAreInStock = true;
-        const updatedProducts = [];
+        // let allItemsAreInStock = true;
+        // const updatedProducts = [];
+        // // Check and update product stock
+        // for (let item of cartItems) {
+        //     const { productId, cartQuantity: quantity } = item;
+        //     const updatedProduct = await ProductModel.findByIdAndUpdate(
+        //         productId,
+        //         { $inc: { quantity: -1 * quantity } },
+        //         { new: true }
+        //     );
+        //     updatedProducts.push({ productId, quantity }); // store for rollback
+        //     if (!updatedProduct || updatedProduct.quantity < 0) {
+        //         allItemsAreInStock = false;
+        //     }
+        // }
+        // // Rollback if any product went below stock
+        // if (!allItemsAreInStock) {
+        //     for (let item of updatedProducts) {
+        //         await ProductModel.findByIdAndUpdate(item.productId, {
+        //             $inc: { quantity: item.quantity },
+        //         });
+        //     }
 
-        // Check and update product stock
-        for (let item of cartItems) {
-            const { productId, cartQuantity: quantity } = item;
+        //     // setting cart items to zero after placing order
+        //     await cartModel.deleteMany({ userId });
 
-            const updatedProduct = await ProductModel.findByIdAndUpdate(
-                productId,
-                { $inc: { quantity: -1 * quantity } },
-                { new: true }
-            );
+        //     return res.status(500).json({
+        //         isSuccess: false,
+        //         message: "Some items are not in stock",
+        //         data: {},
+        //     });
+        // }
 
-            updatedProducts.push({ productId, quantity }); // store for rollback
+        const session = await mongoose.startSession();
 
-            if (!updatedProduct || updatedProduct.quantity < 0) {
-                allItemsAreInStock = false;
-            }
-        }
-
-        // Rollback if any product went below stock
-        if (!allItemsAreInStock) {
-            for (let item of updatedProducts) {
-                await ProductModel.findByIdAndUpdate(item.productId, {
-                    $inc: { quantity: item.quantity },
-                });
-            }
-
-            // setting cart items to zero after placing order
-            await cartModel.deleteMany({ userId });
-
-
-            return res.status(500).json({
-                isSuccess: false,
-                message: "Some items are not in stock",
-                data: {},
+        try {
+            await session.withTransaction(async () => {
+                console.log(cartItems)
+                for (let product of cartItems) {
+                    const { productId, cartQuantity } = product;
+                    console.log("Checking productId:", productId);
+                    const existingProduct = await ProductModel.findById(productId).session(session);
+                    if (!existingProduct) {
+                        console.error("Product not found in DB:", productId);
+                        throw new Error("Invalid product in the cart");
+                    }
+                    if (existingProduct.quantity < cartQuantity) {
+                        throw new Error("Some items are out of Stock!");
+                    }
+                    const updatedProduct = await ProductModel.findByIdAndUpdate(
+                        productId,
+                        { $inc: { quantity: -cartQuantity } },
+                        { new: true, session }
+                    );
+                    if (!updatedProduct || updatedProduct.quantity < 0) {
+                        throw new Error("Some items are out of stock!");
+                    }
+                }
             });
+        } catch (err) {
+            console.error("Transaction failed:", err);
+            throw err;
         }
+
 
         // OPTIONAL: Clear cart after successful order
-        // await cartModel.deleteMany({ userId });
-
+        await cartModel.deleteMany({ userId });
         // If all items are in stock
+
         return res.status(201).json({
             isSuccess: true,
             message: "Order placed successfully",
