@@ -6,10 +6,12 @@ const placeOrderVallidator = (req, res, next) => {
         const { address } = req.body;
 
 
-        if (address == "" || !address) {
+        const { fullName, street, city, state, zipCode, country } = req.body.address || {};
+
+        if (!fullName || !street || !city || !state || !zipCode || !country) {
             return res.status(400).json({
                 isSuccess: false,
-                message: "products and address is required",
+                message: "Please provide complete address details"
             });
         }
 

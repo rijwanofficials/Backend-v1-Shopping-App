@@ -1,4 +1,5 @@
 const { cartModel } = require("../../../models/cartSchema");
+const { orderModel } = require("../../../models/orderShema");
 const { ProductModel } = require('../../../models/productSchema');
 const mongoose = require("mongoose")
 
@@ -7,6 +8,7 @@ const placeOrderController = async (req, res) => {
         console.log("-------------InSide placeOrderController------------");
 
         const { address } = req.body;
+        const { fullName, phoneNumber, street, city, state, zipCode, country } = address;
         const { _id: userId } = req.currentUser;
 
         const cartItems = await cartModel.find({ userId: userId });
@@ -63,9 +65,8 @@ const placeOrderController = async (req, res) => {
 
         try {
             await session.withTransaction(async () => {
-                console.log(cartItems)
-                for (let product of cartItems) {
-                    const { productId, cartQuantity } = product;
+                for (let item of cartItems) {
+                    const { productId, cartQuantity } = item;
                     console.log("Checking productId:", productId);
                     const existingProduct = await ProductModel.findById(productId).session(session);
                     if (!existingProduct) {
@@ -84,6 +85,22 @@ const placeOrderController = async (req, res) => {
                         throw new Error("Some items are out of stock!");
                     }
                 }
+                const productsWithPrice = await Promise.all(
+                    cartItems.map(async (item) => {
+                        const product = await ProductModel.findById(item.productId).lean();
+                        return {
+                            product: item.productId,
+                            cartQuantity: item.cartQuantity,
+                            price: product.price
+                        };
+                    })
+                );
+                await orderModel.create([{
+                    userId,
+                    products: productsWithPrice,
+                    address: { fullName, phoneNumber, street, city, state, zipCode, country }
+                }], { session });
+
             });
         } catch (err) {
             console.error("Transaction failed:", err);
