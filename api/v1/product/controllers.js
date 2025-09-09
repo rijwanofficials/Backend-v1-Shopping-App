@@ -128,28 +128,27 @@ const listProductController = async (req, res) => {
         const {
             limit,
             page,
-            select = "title price images quantity", // default selected fields
+            select = "title price images quantity category", // added category field
             q = "",                                 // search query
+            category = "",                          // new param for category
             maxPrice,
             minPrice,
             sort = "title -price -createdAt"        // default sorting
         } = req.query;
 
         // -------- Regex for search --------
-        // 'i' → case insensitive (Phone = phone)
         const searchRegex = new RegExp(q, "i");
 
         // -------- Convert select param --------
-        // "title,price" → "title price"
-        const slelectedItems = select.split(",").join(" ");
+        const selectedItems = select.split(",").join(" ");
 
         // -------- Limit validation --------
         let limitNum = Number(limit);
         if (limitNum <= 0 || Number.isNaN(limitNum)) {
-            limitNum = 5; // default limit
+            limitNum = 5;
         }
         if (limitNum >= 30) {
-            limitNum = 30; // max cap
+            limitNum = 30;
         }
 
         // -------- Page validation --------
@@ -163,33 +162,37 @@ const listProductController = async (req, res) => {
         const query = ProductModel.find();
 
         // 1. SELECT fields
-        query.select(slelectedItems);
+        query.select(selectedItems);
 
         // 2. SEARCH (only if q is provided)
         if (q) {
             query.or([{ title: searchRegex }, { description: searchRegex }]);
         }
 
-        // 3. PRICE FILTERS
-        const maxpriceNum = Number(maxPrice);
-        if (maxPrice && !Number.isNaN(maxpriceNum)) {
-            query.where("price").lte(maxPrice);
+        // 3. CATEGORY FILTER
+        if (category) {
+            query.where("category").equals(new RegExp(category, "i"));
+            // case-insensitive match
         }
 
-        const minpriceNum = Number(minPrice);
-        if (minPrice && !Number.isNaN(minpriceNum)) {
-            query.where("price").gte(minPrice);
+        // 4. PRICE FILTERS
+        if (maxPrice && !isNaN(Number(maxPrice))) {
+            query.where("price").lte(Number(maxPrice));
         }
 
-        // 4. COUNT total before skip & limit
+        if (minPrice && !isNaN(Number(minPrice))) {
+            query.where("price").gte(Number(minPrice));
+        }
+
+        // 5. COUNT total before skip & limit
         const queryCopy = query.clone();
         const totalDocumentsCount = await queryCopy.countDocuments();
 
-        // 5. PAGINATION
-        query.skip(skipNum);     // skip docs
-        query.limit(limitNum);   // limit docs
+        // 6. PAGINATION
+        query.skip(skipNum);
+        query.limit(limitNum);
 
-        // 6. SORTING (must be before execution)
+        // 7. SORTING
         query.sort(sort);
 
         // -------- Execute final query --------
@@ -200,10 +203,10 @@ const listProductController = async (req, res) => {
             isSuccess: true,
             message: "Products list...",
             data: {
-                products: products,
-                total: totalDocumentsCount, // total count without pagination
-                skip: skipNum,              // how many skipped
-                limit: Math.min(limitNum, products.length) // items returned
+                products,
+                total: totalDocumentsCount,
+                skip: skipNum,
+                limit: Math.min(limitNum, products.length)
             }
         });
 
@@ -217,13 +220,14 @@ const listProductController = async (req, res) => {
     }
 };
 
+
 // VIEW Product
 const viewProductController = async (req, res) => {
     console.log("<-----Inside viewProductController------>");
     try {
         const { id } = req.params
         const product = await ProductModel.findById(id);
-        
+
         if (product == null) {
             return res.status(404).json({
                 isSuccess: false,

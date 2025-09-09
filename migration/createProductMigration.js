@@ -1,39 +1,40 @@
+require("dotenv").config();
+const mongoose = require("mongoose");
 const data = require("./data.json");
-console.log(data);
+const { ProductModel } = require("../models/productSchema");
 
-const createProduct  = async (data) => {
+async function main() {
     try {
-        const res = await fetch("http://localhost:3900/api/v1/products",
-            {
-                method: "POST",
-                body: JSON.stringify(data),
-                headers: {
-                    "content-type": "application/json"
-                }
-            }
-        )
-        const result = await res.json();
-        if (res.status != 201) {
-            console.log("-----Product not created-----");
-            console.log(result.message);
-        }
-    }
+        // connect to your cluster + database
+        await mongoose.connect(process.env.MONGO_DB_URL, {
+            useNewUrlParser: true,
+            useUnifiedTopology: true
+        });
+        console.log("✅ Connected to MongoDB Atlas");
 
-    catch (err) {
-        console.log("----Error creating products---", err.message);
-        console.log("----Error creating products---", err.message);
+        // map your products
+        const products = data.products.map(p => ({
+            title: p.title,
+            description: p.description,
+            price: Math.round(p.price * 80),
+            quantity: p.stock,
+            category: p.category,
+            brand: p.brand,
+            thumbnail: p.thumbnail,
+            images: p.images,
+            createdAt: new Date(),
+            updatedAt: new Date()
+        }));
 
+        // insert into DB
+        await ProductModel.insertMany(products, { ordered: false });
+        console.log("✅ Products inserted successfully!");
+
+        await mongoose.disconnect();
+    } catch (err) {
+        console.error("❌ Migration failed:", err.message);
+        process.exit(1);
     }
 }
 
-const createProductMigration = async () => {
-    const { products } = data;
-    for (let i = 0; i < products.length; i++) {
-        const prouctData = products[i];
-        prouctData.price = Math.round(prouctData.price * 80);//converting doller into rupees
-        await createProduct (prouctData);
-        console.log("Product created...", i + 1);
-    }
-}
-
-createProductMigration();
+main();

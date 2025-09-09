@@ -3,7 +3,7 @@ const { validateObjectId } = require("../../../utils/validateObjectId");
 const createProductValidator = (req, res, next) => {
     try {
         console.log("----Inside createProductValidator----");
-        const { title, price, discription, quantity } = req.body;
+        const { title, price, description, quantity, categoryId } = req.body;
 
         // Quantity validation
         if (quantity && quantity < 0) {
@@ -33,13 +33,25 @@ const createProductValidator = (req, res, next) => {
         }
 
         // Description validation
-        if (discription && discription.length < 5) {
+        if (description && description.length < 5) {
             return res.status(400).json({
                 isSuccess: false,
                 message: "Description is too short",
                 data: {}
             });
         }
+
+        // Category validation
+        if (!categoryId) {
+            return res.status(400).json({
+                isSuccess: false,
+                message: "Category is required",
+                data: {}
+            });
+        }
+
+        // optionally check if categoryId is a valid ObjectId / integer
+        // if (typeof categoryId !== "number") { ... }  OR mongoose.isValidObjectId(categoryId)
 
         next();
     } catch (err) {
@@ -51,6 +63,7 @@ const createProductValidator = (req, res, next) => {
         });
     }
 };
+
 
 
 

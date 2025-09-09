@@ -16,13 +16,6 @@ const productRouter = express.Router();
 
 productRouter.post("/", createProductValidator, createProductController);
 
-// chaining middleware-------******
-// productRouter.get("/", validateUsersLoggedInMiddleware, listProductController);
-
-// router lavel middleware 
-// productRouter.use(validateUsersLoggedInMiddleware)
-// secured apis
-
 productRouter.get("/", listProductController);
 
 

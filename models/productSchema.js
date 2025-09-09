@@ -1,5 +1,4 @@
 const mongoose = require("mongoose");
-
 const { Schema, model } = mongoose;
 
 const productSchema = new Schema({
@@ -22,13 +21,25 @@ const productSchema = new Schema({
     description: {
         type: String,
     },
-    images: [String]
+    category: {
+        type: String,
+        required: true,
+        trim: true,
+    },
+    brand: {
+        type: String,
+        trim: true,
+    },
+    thumbnail: {
+        type: String,
+    },
+    images: [String],
 }, {
     timestamps: true,
     versionKey: false,
 });
 
-// -------------Default Preferences----------
+// Ensure validation runs on update
 productSchema.pre("findOneAndUpdate", function () {
     this.set({
         runValidators: true,
