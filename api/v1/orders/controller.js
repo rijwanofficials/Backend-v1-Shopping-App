@@ -28,38 +28,6 @@ const placeOrderController = async (req, res) => {
             });
         }
 
-        // let allItemsAreInStock = true;
-        // const updatedProducts = [];
-        // // Check and update product stock
-        // for (let item of cartItems) {
-        //     const { productId, cartQuantity: quantity } = item;
-        //     const updatedProduct = await ProductModel.findByIdAndUpdate(
-        //         productId,
-        //         { $inc: { quantity: -1 * quantity } },
-        //         { new: true }
-        //     );
-        //     updatedProducts.push({ productId, quantity }); // store for rollback
-        //     if (!updatedProduct || updatedProduct.quantity < 0) {
-        //         allItemsAreInStock = false;
-        //     }
-        // }
-        // // Rollback if any product went below stock
-        // if (!allItemsAreInStock) {
-        //     for (let item of updatedProducts) {
-        //         await ProductModel.findByIdAndUpdate(item.productId, {
-        //             $inc: { quantity: item.quantity },
-        //         });
-        //     }
-
-        //     // setting cart items to zero after placing order
-        //     await cartModel.deleteMany({ userId });
-
-        //     return res.status(500).json({
-        //         isSuccess: false,
-        //         message: "Some items are not in stock",
-        //         data: {},
-        //     });
-        // }
 
         const session = await mongoose.startSession();
 
@@ -123,9 +91,30 @@ const placeOrderController = async (req, res) => {
         res.status(500).json({
             isSuccess: false,
             message: "Failed to place order",
-            error: err.message,
         });
     }
 };
 
-module.exports = { placeOrderController };
+
+const getUserOrdersController = async (req, res) => {
+    console.log("-------------Inside getUserOrdersController------------");
+    try {
+        const userId = req.currentUser._id;
+        console.log("userId", userId);
+        const userOrders = await orderModel.find({ userId }).populate("products.product").sort({ createdAt: -1 });
+        console.log("User Orders:", JSON.stringify(userOrders, null, 2));
+
+        res.status(200).json({
+            success: true,
+            orders: userOrders
+        });
+    } catch (err) {
+        console.log("-------------Error inside getUserOrdersController------------", err.message);
+        res.status(500).json({
+            success: false,
+            message: "Internal Server Error"
+        });
+    }
+};
+
+module.exports = { placeOrderController, getUserOrdersController };
