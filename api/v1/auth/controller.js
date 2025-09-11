@@ -87,6 +87,7 @@ const userloginController = async (req, res) => {
             {
                 email: userDoc.email,
                 _id: userDoc._id,
+                role: userDoc.role,
             },
             process.env.JWT_SECRET,
             {

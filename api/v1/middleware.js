@@ -1,4 +1,5 @@
-const jwt = require("jsonwebtoken")
+const jwt = require("jsonwebtoken");
+const { ROLE_OPTIONS } = require("../../models/userSchema");
 const validateUsersLoggedInMiddleware = (req, res, next) => {
     try {
         console.log("-------validateUsersLoggedInMiddleware-------");
@@ -38,4 +39,33 @@ const validateUsersLoggedInMiddleware = (req, res, next) => {
     }
 
 }
-module.exports = { validateUsersLoggedInMiddleware }
+
+
+const validateIsAdminMiddleware = (req, res, next) => {
+    try {
+        console.log("-------In Side validateIsAdminMiddleware-------");
+
+        const { role } = req.currentUser;
+        if (role == ROLE_OPTIONS.ADMIN) {
+            req.currentAdmin = req.currentUser;
+            next();
+        }
+        else {
+            res.status(403).json({
+                isSuccess: false,
+                message: "User is not an admin in!"
+            })
+        }
+    }
+    catch (err) {
+        console.log("-------Error in Side validateIsAdminMiddleware-------");
+        res.status(500).json({
+            isSuccess: false,
+            message: "Internal Server Error",
+            data: {}
+        });
+
+    }
+}
+
+module.exports = { validateUsersLoggedInMiddleware, validateIsAdminMiddleware }
