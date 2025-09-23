@@ -2,7 +2,6 @@ const sendsUserInfoControllers = (req, res) => {
     try {
         console.log("<-----Inside sendsUserInfoControllers------>");
         const user = req.currentUser;
-
         res.status(200).json({
             isSuccess: true,
             message: "User is loged in!",
