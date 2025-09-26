@@ -23,7 +23,19 @@ const orderSchema = new Schema({
         state: { type: String, required: true },
         zipCode: { type: String, required: true },
         country: { type: String, required: true, default: "India" }
-    }
+    },
+    orderStatus: {
+        type: String,
+        enum: ["pending", "confirmed", "shipped", "delivered", "canceled"],
+        default: "pending"
+    },
+    paymentStatus: {
+        type: String,
+        enum: ["pending", "completed", "failed", "refunded"],
+        default: "pending"
+    },
+    paymentDetails: Object,
+    paymentSessionId: String,
 }, {
     timestamps: true,
     versionKey: false
