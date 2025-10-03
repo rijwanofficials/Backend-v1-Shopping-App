@@ -4,38 +4,34 @@ const { ProductModel } = require('../../../models/productSchema');
 const mongoose = require("mongoose")
 const { createPaymentSessionController } = require('../orders/services');
 
-
-
-
+// ---------------- Get User Orders ----------------
 const getUserOrdersController = async (req, res) => {
-    console.log("-------------Inside getUserOrdersController------------");
-    try {
-        const userId = req.currentUser._id;
-        console.log("userId", userId);
-        const userOrders = await orderModel.find({ userId }).populate("products.product").sort({ createdAt: -1 });
-        console.log("User Orders:", JSON.stringify(userOrders, null, 2));
+  console.log("-------------Inside getUserOrdersController------------");
+  try {
+    const userId = req.currentUser._id;
+    console.log("userId", userId);
+    const userOrders = await orderModel.find({ userId }).populate("products.product").sort({ createdAt: -1 });
+    console.log("User Orders:", JSON.stringify(userOrders, null, 2));
 
-        res.status(200).json({
-            success: true,
-            orders: userOrders
-        });
-    } catch (err) {
-        console.log("-------------Error inside getUserOrdersController------------", err.message);
-        res.status(500).json({
-            success: false,
-            message: "Internal Server Error"
-        });
-    }
+    res.status(200).json({
+      success: true,
+      orders: userOrders
+    });
+  } catch (err) {
+    console.log("-------------Error inside getUserOrdersController------------", err.message);
+    res.status(500).json({
+      success: false,
+      message: "Internal Server Error"
+    });
+  }
 };
 
-// Helper: Validates address object
+// ---------------- Helper: Validates address ----------------
 const validateAddress = (address) => {
   return address && Object.values(address).every((val) => val);
 };
 
-
-//  * Helper: Runs the transaction to check stock, update quantities, and create order
-
+// ---------------- Helper: Runs transaction for stock & order ----------------
 const createOrderTransaction = async (cartSnapshot, address, userId, session) => {
   const orderItems = [];
 
@@ -72,22 +68,29 @@ const createOrderTransaction = async (cartSnapshot, address, userId, session) =>
   return { order, orderItems };
 };
 
-
-//  * Controller: Place Order
-
+// ---------------- Controller: Place Order ----------------
 const placeOrderController = async (req, res) => {
   try {
     const { address } = req.body;
     const userId = req.currentUser?._id;
 
     // Validate user & address
-    if (!userId) return res.status(401).json({ isSuccess: false, message: "User not authenticated" });
-    if (!validateAddress(address)) return res.status(400).json({ isSuccess: false, message: "Incomplete address" });
+    if (!userId) return res.status(401).json({
+      isSuccess: false,
+      message: "User not authenticated"
+    });
+    if (!validateAddress(address)) return res.status(400).json({
+      isSuccess: false,
+      message: "Incomplete address"
+    });
 
     // Fetch cart
     const cartItems = await cartModel.find({ userId });
     if (!cartItems || cartItems.length === 0) {
-      return res.status(400).json({ isSuccess: false, message: "Cart is empty" });
+      return res.status(400).json({
+        isSuccess: false,
+        message: "Cart is empty"
+      });
     }
 
     const cartSnapshot = cartItems.map((item) => ({ ...item._doc }));
@@ -107,8 +110,7 @@ const placeOrderController = async (req, res) => {
       session.endSession();
     }
 
-    // OPTIONAL: Clear cart after successful order
-    await cartModel.deleteMany({ userId });
+    // await cartModel.deleteMany({ userId });
 
     // Compute total amount
     const totalAmount = orderItems.reduce((acc, item) => acc + item.price * item.cartQuantity, 0);
