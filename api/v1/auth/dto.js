@@ -8,8 +8,6 @@ const usersignupValidator = (req, res, next) => {
                 message: "Email password and OTP are required"
             });
         }
-
-        // Email validator
         const emailRegex = /^\S+@\S+\.\S+$/;
         if (!emailRegex.test(req.body.email)) {
             return res.status(400).json({
@@ -17,8 +15,6 @@ const usersignupValidator = (req, res, next) => {
                 message: "Invalid email format"
             });
         }
-
-        // Password validator
         const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
         if (!passwordRegex.test(req.body.password)) {
             return res.status(400).json({
@@ -46,23 +42,6 @@ const userloginValidator = (req, res, next) => {
                 message: "Email and password are required"
             });
         }
-        // // Email validator
-        // const emailRegex = /^\S+@\S+\.\S+$/;
-        // if (!emailRegex.test(req.body.email)) {
-        //     return res.status(400).json({
-        //         isSuccess: false,
-        //         message: "Invalid email format"
-        //     });
-        // }
-
-        // // Password validator
-        // const passwordRegex = /^(?=.*[a-z])(?=.*[A-Z])(?=.*\d)(?=.*[@$!%*?&])[A-Za-z\d@$!%*?&]{8,}$/;
-        // if (!passwordRegex.test(req.body.password)) {
-        //     return res.status(400).json({
-        //         isSuccess: false,
-        //         message: "Password must be at least 8 characters long and include uppercase, lowercase, number, and special character"
-        //     });
-        // }
         next();
     }
     catch (err) {

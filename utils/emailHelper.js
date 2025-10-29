@@ -10,8 +10,6 @@ const transporter = nodemailer.createTransport({
     },
 });
 
-
-// function for verifying wheather my email server is on or not
 (async () => {
     try {
         await transporter.verify();

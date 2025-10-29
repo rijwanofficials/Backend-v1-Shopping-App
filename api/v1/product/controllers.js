@@ -120,105 +120,114 @@ const deleteProductController = async (req, res) => {
     }
 };
 
-// GET products with parameter
+const allowedCategories = [
+  "womens-dresses",
+  "womens-jewellery",
+  "beauty",
+  "womens-watches",
+  "womens-shoes",
+  "womens-bags",
+  "motorcycle",
+  "groceries",
+  "furniture",
+  "sports-accessories",
+];
+
+// ✅ Get products with filters, pagination, and search
 const listProductController = async (req, res) => {
-    try {
-        console.log("<-----Inside listProductController------>");
-        // -------- Extract query parameters --------
-        const {
-            limit,
-            page,
-            select = "title price images quantity category", // added category field
-            q = "",                                 // search query
-            category = "",                          // new param for category
-            maxPrice,
-            minPrice,
-            sort = "title -price -createdAt"        // default sorting
-        } = req.query;
+  try {
+    console.log("<----- Inside listProductController ----->");
 
-        // -------- Regex for search --------
-        const searchRegex = new RegExp(q, "i");
+    const {
+      limit,
+      page,
+      select = "title price images quantity category",
+      q = "",
+      category = "",
+      minPrice,
+      maxPrice,
+      sort = "title -price -createdAt",
+    } = req.query;
 
-        // -------- Convert select param --------
-        const selectedItems = select.split(",").join(" ");
+    // ---------- Pagination ----------
+    const limitNum = Math.min(Math.max(Number(limit) || 10, 1), 50);
+    const pageNum = Math.max(parseInt(page) || 1, 1);
+    const skipNum = (pageNum - 1) * limitNum;
 
-        // -------- Limit validation --------
-        let limitNum = Number(limit);
-        if (limitNum <= 0 || Number.isNaN(limitNum)) {
-            limitNum = 5;
-        }
-        if (limitNum >= 30) {
-            limitNum = 30;
-        }
+    // ---------- Start query ----------
+    const query = ProductModel.find();
 
-        // -------- Page validation --------
-        let pageNum = parseInt(page) || 1;
-        if (pageNum <= 0 || Number.isNaN(pageNum)) {
-            pageNum = 1;
-        }
-        const skipNum = (pageNum - 1) * limitNum;
+    // Select specific fields
+    query.select(select.split(",").join(" "));
 
-        // -------- Start building query --------
-        const query = ProductModel.find();
-
-        // 1. SELECT fields
-        query.select(selectedItems);
-
-        // 2. SEARCH (only if q is provided)
-        if (q) {
-            query.or([{ title: searchRegex }, { description: searchRegex }]);
-        }
-
-        // 3. CATEGORY FILTER
-        if (category) {
-            query.where("category").equals(new RegExp(category, "i"));
-            // case-insensitive match
-        }
-
-        // 4. PRICE FILTERS
-        if (maxPrice && !isNaN(Number(maxPrice))) {
-            query.where("price").lte(Number(maxPrice));
-        }
-
-        if (minPrice && !isNaN(Number(minPrice))) {
-            query.where("price").gte(Number(minPrice));
-        }
-
-        // 5. COUNT total before skip & limit
-        const queryCopy = query.clone();
-        const totalDocumentsCount = await queryCopy.countDocuments();
-
-        // 6. PAGINATION
-        query.skip(skipNum);
-        query.limit(limitNum);
-
-        // 7. SORTING
-        query.sort(sort);
-
-        // -------- Execute final query --------
-        const products = await query;
-
-        // -------- Response --------
-        res.status(200).json({
-            isSuccess: true,
-            message: "Products list...",
-            data: {
-                products,
-                total: totalDocumentsCount,
-                skip: skipNum,
-                limit: Math.min(limitNum, products.length)
-            }
-        });
-
-    } catch (err) {
-        console.log("----Error inside listProductController--->>", err.message);
-        res.status(500).json({
-            isSuccess: false,
-            message: "Failed to fetch products",
-            error: err.message
-        });
+    // ---------- Text search ----------
+    if (q) {
+      const searchRegex = new RegExp(q, "i");
+      query.or([{ title: searchRegex }, { description: searchRegex }]);
     }
+
+    // ---------- Category filter ----------
+    if (category) {
+      const categories = category
+        .split(",")
+        .map((c) => c.trim().toLowerCase())
+        .filter(Boolean);
+
+      if (categories.length > 0) {
+        console.log("Filtering categories:", categories);
+        query.where("category").in(categories);
+      }
+    }
+
+    // ---------- Price filters ----------
+    const min = Number(minPrice);
+    const max = Number(maxPrice);
+
+    if (!isNaN(min)) query.where("price").gte(min);
+    if (!isNaN(max)) query.where("price").lte(max);
+    if (!isNaN(min) && !isNaN(max) && min > max) {
+      return res.status(400).json({
+        isSuccess: false,
+        message: "minPrice cannot be greater than maxPrice",
+      });
+    }
+
+    // ---------- Count total ----------
+    const totalDocumentsCount = await query.clone().countDocuments();
+
+    // ---------- Pagination ----------
+    query.skip(skipNum).limit(limitNum);
+
+    // ---------- Sorting ----------
+    query.sort(sort);
+
+    // ---------- Execute ----------
+    const products = await query;
+
+    // ---------- Response ----------
+    res.status(200).json({
+      isSuccess: true,
+      message:
+        products.length > 0
+          ? "Products fetched successfully"
+          : "No products found for the given filters",
+      data: {
+        products,
+        total: totalDocumentsCount,
+        skip: skipNum,
+        limit: limitNum,
+      },
+    });
+  } catch (err) {
+    console.error("❌ Error inside listProductController:", err.message);
+    res.status(500).json({
+      isSuccess: false,
+      message: "Failed to fetch products",
+      error: err.message,
+    });
+  }
 };
+
 
 
 // VIEW Product
@@ -252,4 +261,75 @@ const viewProductController = async (req, res) => {
 };
 
 
-module.exports = { createProductController, getAllProductController, editProductController, deleteProductController, listProductController, viewProductController }
+// GET /api/categories
+const getFilteredProductsController = async (req, res) => {
+    try {
+        const { category } = req.query;
+        let { minPrice, maxPrice } = req.query;
+
+        minPrice = minPrice ? Number(minPrice) : 0;
+        maxPrice = maxPrice ? Number(maxPrice) : 1000000;
+
+        if (isNaN(minPrice) || isNaN(maxPrice)) {
+            return res.status(400).json({
+                success: false,
+                message: "minPrice and maxPrice must be numbers",
+            });
+        }
+
+        if (minPrice < 0) {
+            return res.status(400).json({
+                success: false,
+                message: "minPrice cannot be negative",
+            });
+        }
+
+        if (minPrice > maxPrice) {
+            return res.status(400).json({
+                success: false,
+                message: "minPrice cannot be greater than maxPrice",
+            });
+        }
+
+        if (category) {
+            const categoryExists = await ProductModel.exists({ category });
+            if (!categoryExists) {
+                return res.status(404).json({
+                    success: false,
+                    message: `Category: ${category}, not found.`,
+                });
+            }
+        }
+
+        const filter = {
+            price: { $gte: minPrice, $lte: maxPrice },
+        };
+
+        if (category) filter.category = category;
+
+        const products = await ProductModel.find(filter);
+
+        res.status(200).json({
+            success: true,
+            count: products.length,
+            products,
+        });
+    } catch (error) {
+        console.error("Error fetching filtered products:", error);
+        res.status(500).json({
+            success: false,
+            message: "Server Error",
+        });
+    }
+};
+
+
+module.exports = {
+    createProductController,
+    getAllProductController,
+    editProductController,
+    deleteProductController,
+    listProductController,
+    viewProductController,
+    getFilteredProductsController
+}
