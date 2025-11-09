@@ -1,6 +1,7 @@
 const mongoose = require('mongoose');
 const { ProductModel } = require('../../../models/productSchema');
 const { validateObjectId } = require("../../../utils/validateObjectId");
+const { generateEmbedding } = require("../../../utils/geminiEmbed");
 
 // CREATE Product 
 const createProductController = async (req, res) => {
@@ -121,112 +122,150 @@ const deleteProductController = async (req, res) => {
 };
 
 const allowedCategories = [
-  "womens-dresses",
-  "womens-jewellery",
-  "beauty",
-  "womens-watches",
-  "womens-shoes",
-  "womens-bags",
-  "motorcycle",
-  "groceries",
-  "furniture",
-  "sports-accessories",
+    "womens-dresses",
+    "womens-jewellery",
+    "beauty",
+    "womens-watches",
+    "womens-shoes",
+    "womens-bags",
+    "motorcycle",
+    "groceries",
+    "furniture",
+    "sports-accessories",
 ];
 
 // ✅ Get products with filters, pagination, and search
 const listProductController = async (req, res) => {
-  try {
-    console.log("<----- Inside listProductController ----->");
+    try {
+        console.log("<----- Inside listProductController ----->");
 
-    const {
-      limit,
-      page,
-      select = "title price images quantity category",
-      q = "",
-      category = "",
-      minPrice,
-      maxPrice,
-      sort = "title -price -createdAt",
-    } = req.query;
+        const {
+            limit,
+            page,
+            select = "title price images quantity category",
+            q = "",
+            category = "",
+            minPrice,
+            maxPrice,
+            sort = "title -price -createdAt",
+        } = req.query;
 
-    // ---------- Pagination ----------
-    const limitNum = Math.min(Math.max(Number(limit) || 10, 1), 50);
-    const pageNum = Math.max(parseInt(page) || 1, 1);
-    const skipNum = (pageNum - 1) * limitNum;
+        const limitNum = Math.min(Math.max(Number(limit) || 10, 1), 50);
+        const pageNum = Math.max(parseInt(page) || 1, 1);
+        const skipNum = (pageNum - 1) * limitNum;
 
-    // ---------- Start query ----------
-    const query = ProductModel.find();
+        // ---------------- SEMANTIC SEARCH ----------------
+        if (q) {
+            console.log("🔍 Performing semantic search for:", q);
 
-    // Select specific fields
-    query.select(select.split(",").join(" "));
+            try {
+                // 1️⃣ Generate embedding for the query
+                const queryEmbedding = await generateEmbedding(q);
 
-    // ---------- Text search ----------
-    if (q) {
-      const searchRegex = new RegExp(q, "i");
-      query.or([{ title: searchRegex }, { description: searchRegex }]);
+                // 2️⃣ Fetch all products with stored embeddings
+                const allProducts = await ProductModel.find(
+                    { embedding: { $exists: true } }
+                ).select("title price images category embedding"); // Only select needed fields
+
+                // 3️⃣ Define cosine similarity
+                const cosineSimilarity = (a, b) => {
+                    const dot = a.reduce((sum, val, i) => sum + val * b[i], 0);
+                    const normA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
+                    const normB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
+                    return dot / (normA * normB);
+                };
+
+                // 4️⃣ Compute similarity scores
+                const ranked = allProducts
+                    .map((p) => ({
+                        ...p.toObject(),
+                        similarity: cosineSimilarity(queryEmbedding, p.embedding),
+                    }))
+                    .filter((p) => p.similarity > 0.45) // keep only strong matches
+                    .sort((a, b) => b.similarity - a.similarity)
+                    .slice(0, 10); // Top 10
+
+                // ❌ Remove embeddings before sending
+                ranked.forEach(p => delete p.embedding);
+
+                // ✅ Print only product titles in console
+                console.log("✅ Top Semantic Results:");
+                ranked.forEach((p, i) => console.log(`${i + 1}. ${p.title}`));
+
+                // ✅ Send response
+                return res.status(200).json({
+                    isSuccess: true,
+                    message: "Semantic search results fetched successfully",
+                    data: {
+                        products: ranked.map(({ _id, title, price, category, images, similarity }) => ({
+                            _id,
+                            title,
+                            price,
+                            category,
+                            images,
+                            similarity: similarity.toFixed(3), // rounded
+                        })),
+                    },
+                });
+
+            } catch (error) {
+                console.error("❌ Semantic search failed, falling back:", error.message);
+            }
+        }
+
+        // ---------------- NORMAL FILTERS ----------------
+        const query = ProductModel.find();
+        query.select(select.split(",").join(" "));
+
+        if (category) {
+            const categories = category
+                .split(",")
+                .map((c) => c.trim().toLowerCase())
+                .filter(Boolean);
+            if (categories.length > 0) query.where("category").in(categories);
+        }
+
+        const min = Number(minPrice);
+        const max = Number(maxPrice);
+        if (!isNaN(min)) query.where("price").gte(min);
+        if (!isNaN(max)) query.where("price").lte(max);
+        if (!isNaN(min) && !isNaN(max) && min > max) {
+            return res.status(400).json({
+                isSuccess: false,
+                message: "minPrice cannot be greater than maxPrice",
+            });
+        }
+
+        const totalDocumentsCount = await query.clone().countDocuments();
+        query.skip(skipNum).limit(limitNum);
+        query.sort(sort);
+        const normalProducts = await query;
+
+        res.status(200).json({
+            isSuccess: true,
+            message:
+                normalProducts.length > 0
+                    ? "Products fetched successfully"
+                    : "No products found for the given filters",
+            data: {
+                products: normalProducts,
+                total: totalDocumentsCount,
+                skip: skipNum,
+                limit: limitNum,
+            },
+        });
+    } catch (err) {
+        console.error("❌ Error inside listProductController:", err.message);
+        res.status(500).json({
+            isSuccess: false,
+            message: "Failed to fetch products",
+            error: err.message,
+        });
     }
-
-    // ---------- Category filter ----------
-    if (category) {
-      const categories = category
-        .split(",")
-        .map((c) => c.trim().toLowerCase())
-        .filter(Boolean);
-
-      if (categories.length > 0) {
-        console.log("Filtering categories:", categories);
-        query.where("category").in(categories);
-      }
-    }
-
-    // ---------- Price filters ----------
-    const min = Number(minPrice);
-    const max = Number(maxPrice);
-
-    if (!isNaN(min)) query.where("price").gte(min);
-    if (!isNaN(max)) query.where("price").lte(max);
-    if (!isNaN(min) && !isNaN(max) && min > max) {
-      return res.status(400).json({
-        isSuccess: false,
-        message: "minPrice cannot be greater than maxPrice",
-      });
-    }
-
-    // ---------- Count total ----------
-    const totalDocumentsCount = await query.clone().countDocuments();
-
-    // ---------- Pagination ----------
-    query.skip(skipNum).limit(limitNum);
-
-    // ---------- Sorting ----------
-    query.sort(sort);
-
-    // ---------- Execute ----------
-    const products = await query;
-
-    // ---------- Response ----------
-    res.status(200).json({
-      isSuccess: true,
-      message:
-        products.length > 0
-          ? "Products fetched successfully"
-          : "No products found for the given filters",
-      data: {
-        products,
-        total: totalDocumentsCount,
-        skip: skipNum,
-        limit: limitNum,
-      },
-    });
-  } catch (err) {
-    console.error("❌ Error inside listProductController:", err.message);
-    res.status(500).json({
-      isSuccess: false,
-      message: "Failed to fetch products",
-      error: err.message,
-    });
-  }
 };
+
+
+
 
 
 
@@ -324,6 +363,35 @@ const getFilteredProductsController = async (req, res) => {
 };
 
 
+// Controllers for embedding all products
+const embedAllProducts = async (req, res) => {
+    try {
+        const products = await ProductModel.find();
+
+        if (!products.length) {
+            return res.status(404).json({ message: "No products found" });
+        }
+
+        for (const product of products) {
+            console.log(`🟡 Before embedding: ${product.title}`);
+            const text = `${product.title} ${product.description || ""} ${product.category || ""} ${product.brand || ""}`;
+            const embedding = await generateEmbedding(text);
+            product.embedding = embedding;
+            await product.save();
+            console.log(`✅ After embedding: ${product.title}`);
+            console.log(embedding.slice(0, 10), "..."); // print first 10 values for clarity
+        }
+
+        res.json({ message: "✅ All products embedded successfully" });
+    } catch (error) {
+        console.error("❌ Error generating embeddings:", error.message);
+        res.status(500).json({ error: "Error generating embeddings" });
+    }
+};
+
+
+
+
 module.exports = {
     createProductController,
     getAllProductController,
@@ -331,5 +399,6 @@ module.exports = {
     deleteProductController,
     listProductController,
     viewProductController,
-    getFilteredProductsController
+    getFilteredProductsController,
+    embedAllProducts
 }

@@ -12,6 +12,7 @@ const { editProductController,
 // Product Validator
 const { createProductValidator, updateProductValidator, viewProductValidator, listProductValidator } = require("./dto");
 const { validateUsersLoggedInMiddleware } = require("../middleware");
+const { embedAllProducts } = require("./controllers");
 
 const productRouter = express.Router();
 
@@ -30,4 +31,10 @@ productRouter.get('/view/:id', viewProductValidator, viewProductController);
 
 productRouter.get("/filter", getFilteredProductsController);
 
+productRouter.post("/embed", embedAllProducts);
+
+
 module.exports = { productRouter };
+
+
+
