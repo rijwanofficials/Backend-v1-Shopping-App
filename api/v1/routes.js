@@ -6,6 +6,7 @@ const { usersRouter } = require("./users/routes");
 const { cartRouter } = require("./cart/routes");
 const { orderRouter } = require("./orders/routes");
 const { adminRouter } = require("./admin/routes");
+const { chatRouter } = require("./chat/routes");
 const apiRouter = express.Router();
 
 apiRouter.use("/products", productRouter);
@@ -15,5 +16,6 @@ apiRouter.use("/users", usersRouter);
 apiRouter.use("/cart", cartRouter);
 apiRouter.use("/orders", orderRouter);
 apiRouter.use("/admins", adminRouter);
+apiRouter.use("/chat", chatRouter);
 
 module.exports = { apiRouter };

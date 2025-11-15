@@ -2,6 +2,7 @@ const mongoose = require('mongoose');
 const { ProductModel } = require('../../../models/productSchema');
 const { validateObjectId } = require("../../../utils/validateObjectId");
 const { generateEmbedding } = require("../../../utils/geminiEmbed");
+const { getAIResponse } = require('../../../utils/aiResponse');
 
 // CREATE Product 
 const createProductController = async (req, res) => {
@@ -134,7 +135,6 @@ const allowedCategories = [
     "sports-accessories",
 ];
 
-// ✅ Get products with filters, pagination, and search
 const listProductController = async (req, res) => {
     try {
         console.log("<----- Inside listProductController ----->");
@@ -156,61 +156,61 @@ const listProductController = async (req, res) => {
 
         // ---------------- SEMANTIC SEARCH ----------------
         if (q) {
-            console.log("🔍 Performing semantic search for:", q);
+            console.log("Performing semantic search for:", q);
 
-            try {
-                // 1️⃣ Generate embedding for the query
-                const queryEmbedding = await generateEmbedding(q);
+            const queryEmbedding = await generateEmbedding(q);
 
-                // 2️⃣ Fetch all products with stored embeddings
-                const allProducts = await ProductModel.find(
-                    { embedding: { $exists: true } }
-                ).select("title price images category embedding"); // Only select needed fields
-
-                // 3️⃣ Define cosine similarity
-                const cosineSimilarity = (a, b) => {
-                    const dot = a.reduce((sum, val, i) => sum + val * b[i], 0);
-                    const normA = Math.sqrt(a.reduce((sum, val) => sum + val * val, 0));
-                    const normB = Math.sqrt(b.reduce((sum, val) => sum + val * val, 0));
-                    return dot / (normA * normB);
-                };
-
-                // 4️⃣ Compute similarity scores
-                const ranked = allProducts
-                    .map((p) => ({
-                        ...p.toObject(),
-                        similarity: cosineSimilarity(queryEmbedding, p.embedding),
-                    }))
-                    .filter((p) => p.similarity > 0.45) // keep only strong matches
-                    .sort((a, b) => b.similarity - a.similarity)
-                    .slice(0, 10); // Top 10
-
-                // ❌ Remove embeddings before sending
-                ranked.forEach(p => delete p.embedding);
-
-                // ✅ Print only product titles in console
-                console.log("✅ Top Semantic Results:");
-                ranked.forEach((p, i) => console.log(`${i + 1}. ${p.title}`));
-
-                // ✅ Send response
-                return res.status(200).json({
-                    isSuccess: true,
-                    message: "Semantic search results fetched successfully",
-                    data: {
-                        products: ranked.map(({ _id, title, price, category, images, similarity }) => ({
-                            _id,
-                            title,
-                            price,
-                            category,
-                            images,
-                            similarity: similarity.toFixed(3), // rounded
-                        })),
+            const results = await ProductModel.aggregate([
+                {
+                    $vectorSearch: {
+                        index: "vector_index",
+                        path: "embedding",
+                        queryVector: queryEmbedding,
+                        numCandidates: 500,
+                        limit: 5,
                     },
-                });
+                },
+                {
+                    $project: {
+                        _id: 1,
+                        title: 1,
+                        description: 1,
+                        category: 1,
+                        price: 1,
+                        images: 3,
+                    },
+                },
+            ])
+            // RAG - Retrieval Augmented Generation
 
-            } catch (error) {
-                console.error("❌ Semantic search failed, falling back:", error.message);
-            }
+            const prompt = `
+      User asked: "${q}"
+
+      Based on the products we have, give a short helpful answer and mention some relevant items.
+
+      Relevant products from our database:
+      ${JSON.stringify(results, null, 2)}
+
+      You are an e-commerce assistant helping users discover products.
+      `;
+
+            const responseText = await getAIResponse(prompt);
+
+            console.log("Gemini Response Text:", responseText);
+
+            console.log("✅ Semantic search results:", results.length);
+            return res.json({
+                isSuccess: true,
+                message:
+                    results.length > 0
+                        ? "Semantic search results fetched successfully"
+                        : "No products found for the query",
+                data: {
+                    products: results,
+                    total: results.length,
+                    aiResponse: responseText
+                },
+            });
         }
 
         // ---------------- NORMAL FILTERS ----------------
@@ -241,7 +241,7 @@ const listProductController = async (req, res) => {
         query.sort(sort);
         const normalProducts = await query;
 
-        res.status(200).json({
+        return res.status(200).json({
             isSuccess: true,
             message:
                 normalProducts.length > 0
@@ -255,7 +255,7 @@ const listProductController = async (req, res) => {
             },
         });
     } catch (err) {
-        console.error("❌ Error inside listProductController:", err.message);
+        console.error("❌ Error inside listProductController:", err);
         res.status(500).json({
             isSuccess: false,
             message: "Failed to fetch products",

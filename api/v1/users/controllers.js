@@ -6,7 +6,7 @@ const sendsUserInfoControllers = (req, res) => {
             isSuccess: true,
             message: "User is loged in!",
             data: {
-                email: user.email,
+                data:user
             }
         })
     } catch (err) {

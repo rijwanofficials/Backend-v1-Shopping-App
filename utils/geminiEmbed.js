@@ -14,5 +14,4 @@ async function generateEmbedding(text) {
     throw error;
   }
 }
-
 module.exports = { generateEmbedding };
