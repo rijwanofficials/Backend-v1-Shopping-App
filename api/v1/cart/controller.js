@@ -3,7 +3,8 @@ const { cartModel } = require("../../../models/cartSchema");
 const addToCartController = async (req, res) => {
     try {
         const { productId } = req.params;
-        const { _id: userId } = req.currentUser;
+        const { id: userId } = req.currentUser;
+        console.log("productId:", productId, "userId:", userId);
 
         let cartItem = await cartModel.findOne({ userId, productId });
 
@@ -41,7 +42,7 @@ const addToCartController = async (req, res) => {
 const removeItemFromCartController = async (req, res) => {
     try {
         const { productId } = req.params;
-        const { _id: userId } = req.currentUser;
+        const { id: userId } = req.currentUser;
 
         const cartItem = await cartModel.findOne({ userId, productId });
 
@@ -84,10 +85,10 @@ const removeItemFromCartController = async (req, res) => {
 
 const getCartItemController = async (req, res) => {
     try {
-        const { _id: userId } = req.currentUser;
+        const { id: userId } = req.currentUser;
 
         const cartItems = await cartModel.find({ userId })
-            .populate("productId") 
+            .populate("productId")
             .lean();
 
         res.status(200).json({

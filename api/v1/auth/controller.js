@@ -1,4 +1,3 @@
-const { otpModel } = require("../../../models/otpSchema");
 const { UserModel } = require("../../../models/userSchema");
 const bcrypt = require("bcrypt");
 const jwt = require("jsonwebtoken")
@@ -6,14 +5,6 @@ const usersignupController = async (req, res) => {
     try {
         console.log("<-----Inside usersignupController------>");
         const { email, password } = req.body;
-
-        // const salt = await bcrypt.genSalt(15)
-        // // increasing the computation in order of 2^x where x is rounds
-        // // higher the number ,more secure it is ,it is more computationally heavy---->>slower
-        // console.log("salt--->>", salt);
-        // const hashedPassword = await bcrypt.hash(password.toString(), salt);
-        // console.log("Hashed Password---->>", hashedPassword);
-        // const hashedPassword = await bcrypt.hash(password.toString(), 12);
         const normalizedEmail = email.toLowerCase();
         const newUser = await UserModel.create({
             email: normalizedEmail,
@@ -61,7 +52,6 @@ const userloginController = async (req, res) => {
         const userDoc = await UserModel.findOne({
             email: normalizedEmail,
         }).lean();
-        // validation if user exist or not
         if (userDoc == null) {
             res.status(400).json({
                 isSuccess: false,
@@ -77,10 +67,7 @@ const userloginController = async (req, res) => {
             res.status(400).json({
                 isSuccess: false,
                 message: "Incorrect password! Please try again...",
-            });
-            // have some logic for max attempt or max try as a user can do 
-            // when ever there is error attempt a count of try 
-            // after the threshold limit is reached! block the activity for some time 
+            }); 
             return;
         }
         const token = jwt.sign(
